@@ -1,0 +1,13 @@
+{
+    "version": "0.0.1",
+    "name": "快手自动上传视频",
+    "authors": "NaturalGao",
+    "userConfig": {
+        "cookie": "",
+        "uploadToken": "",
+        "webApiPh": ""
+    },
+    "titleFileUrl": "./title.txt",
+    "videoFileUrl": "./video/",
+    "secondDomain": "其它描述"
+}
