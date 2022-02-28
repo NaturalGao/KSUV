@@ -21,6 +21,7 @@ import (
 )
 
 const FILE_URL string = "./config.json"
+const MAX_UPLOAD_VIDEO = 100
 
 var chSignal chan os.Signal
 
@@ -41,19 +42,19 @@ var Commodities []interface{}
 var SelectCommodIndex int
 
 type UserConfig struct {
-	Cookie      string
-	UploadToken string
-	WebApiPh    string
+	Cookie   string
+	WebApiPh string
 }
 
 type Config struct {
-	Version      string
-	Name         string
-	Authors      string
-	UserConfig   *UserConfig
-	TitleFileUrl string
-	VideoFileUrl string
-	SecondDomain string
+	Version         string
+	Name            string
+	Authors         string
+	UserConfig      *UserConfig
+	TitleFileUrl    string
+	VideoFileUrl    string
+	SecondDomain    string
+	UseSerialNumber bool
 }
 
 type ErrorD struct {
@@ -243,7 +244,11 @@ func SubmitVideo(fileInfo api.ResultMp, fileName string, s_n int, tl int64) (isS
 
 	ti, _ := rand.Int(rand.Reader, big.NewInt(tl))
 
-	caption := Titles[ti.Int64()] + " " + strconv.Itoa(s_n+1)
+	caption := Titles[ti.Int64()]
+
+	if Settings.UseSerialNumber {
+		caption += " " + strconv.Itoa(s_n+1)
+	}
 
 	recTagIdList := []int64{33532345,
 		22154940,
@@ -418,25 +423,28 @@ func loadVideoPath() bool {
 		return false
 	}
 
-	file_count := 0
-
 	for _, f := range files {
 		fileName := f.Name()
 		filesNameString := strings.Split(fileName, ".")
 		suffix := strings.ToLower(filesNameString[len(filesNameString)-1])
 		if suffix == "mp4" {
 			VideoFiles = append(VideoFiles, f)
-			file_count++
 		}
 
 	}
 
-	if file_count == 0 {
+	v_l := len(VideoFiles)
+
+	if v_l == 0 {
 		fmt.Println(Settings.VideoFileUrl, "此目录下暂未发现 MP4 格式文件,程序即将终止....")
 		return false
 	}
 
-	fmt.Println("检测到有", file_count, "个视频可上传!")
+	if v_l > MAX_UPLOAD_VIDEO {
+		VideoFiles = VideoFiles[0:MAX_UPLOAD_VIDEO]
+	}
+
+	fmt.Println("检测到有", v_l, "个视频可上传!上传视频上限", MAX_UPLOAD_VIDEO, "个视频")
 
 	return true
 }
