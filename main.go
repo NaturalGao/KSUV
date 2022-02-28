@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/eiannone/keyboard"
@@ -89,7 +90,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	go uploadRun()
+	uploadRun()
 
 	//合建chan
 	chSignal = make(chan os.Signal, 1)
@@ -103,56 +104,69 @@ func main() {
 
 // 上传任务开始
 func uploadRun() {
-
 	s_c, e_c := 0, 0
 
 	tl := int64(len(Titles))
 
+	var wg sync.WaitGroup
+	ch := make(chan struct{}, 4)
+
 	for i, file := range VideoFiles {
+		ch <- struct{}{}
+		wg.Add(1)
 
-		fileName := file.Name()
-		fileLength := file.Size()
+		go func(file fs.FileInfo, i int) {
 
-		upToken, err := UploadToken()
+			defer wg.Done()
 
-		if err != nil {
-			e_c++
-			continue
-		}
+			fileName := file.Name()
+			fileLength := file.Size()
 
-		isUpload := UploadMultipart(upToken, fileName, fileLength)
+			upToken, err := UploadToken()
 
-		if !isUpload {
-			e_c++
-			continue
-		}
+			if err != nil {
+				e_c++
+				<-ch
+				return
+			}
 
-		fileInfo, err := UploadFinish(upToken, fileName, fileLength)
+			isUpload := UploadMultipart(upToken, fileName, fileLength)
 
-		if err != nil {
-			e_c++
-			continue
-		}
+			if !isUpload {
+				e_c++
+				<-ch
+				return
+			}
 
-		isSubmit, isEnd := SubmitVideo(fileInfo, fileName, i, tl)
+			fileInfo, err := UploadFinish(upToken, fileName, fileLength)
 
-		if isEnd {
-			e_c++
-			break
-		}
+			if err != nil {
+				e_c++
+				<-ch
+				return
+			}
 
-		if !isSubmit {
-			e_c++
-			continue
-		}
+			isSubmit, isEnd := SubmitVideo(fileInfo, fileName, i, tl)
 
-		s_c++
+			if isEnd {
+				os.Exit(1)
+			}
+
+			if !isSubmit {
+				e_c++
+				<-ch
+				return
+			}
+
+			s_c++
+			<-ch
+		}(file, i)
 	}
+
+	wg.Wait()
 
 	fmt.Println("视频发布完成!")
 	fmt.Printf("success: %d  error: %d\n", s_c, e_c)
-
-	chSignal <- syscall.SIGTERM
 }
 
 // 获取视频上传Token
