@@ -40,3 +40,23 @@
 
 上图画红色框的就是需要的 Cookie，webApiPh 就是 Cookie 下的
 
+
+
+## 程序运行效果
+
+配置正常的情况下：
+
+1. 选择是否开始程序
+
+<img src="https://i.bmp.ovh/imgs/2022/02/17916e6f64f8c5fa.png" style="zoom: 67%;" />
+
+
+
+2. 选择关联的商品
+
+   <img src="https://i.bmp.ovh/imgs/2022/02/261a44472480b8d3.png" style="zoom:67%;" />
+
+3. 上传
+
+   <img src="https://i.bmp.ovh/imgs/2022/02/3c0e5575e89261fd.png" style="zoom:67%;" />
+
