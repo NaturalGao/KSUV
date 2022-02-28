@@ -34,7 +34,7 @@
 
 
 
-![](https://i.bmp.ovh/imgs/2022/02/1e11a828931ad05f.png)
+<img src="https://i.bmp.ovh/imgs/2022/02/1e11a828931ad05f.png" style="zoom: 50%;" />
 
 
 
