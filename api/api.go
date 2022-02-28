@@ -17,6 +17,7 @@ var ApiLists map[string]string = map[string]string{
 	"relationList": "relation/list",
 	"uploadFinish": "upload/finish",
 	"submit":       "submit",
+	"uploadToken":  "upload/pre",
 }
 
 type ApiObject struct {
@@ -39,6 +40,23 @@ func (a *ApiObject) RelationList(body map[string]interface{}) (ResultMp, error) 
 		SetHeader("Cookie", a.Cookie).
 		SetBody(body).
 		Post(a.GetRequestUrl("relationList"))
+
+	if err != nil {
+		return make(map[string]interface{}), err
+	}
+
+	r, err := JsonToMap(resp.Body())
+
+	return r, err
+}
+
+// 获取上传视频Token
+func (a *ApiObject) UploadToken(body map[string]interface{}) (ResultMp, error) {
+	resp, err := ClientHttp.R().
+		SetHeader("Content-Type", "application/json").
+		SetHeader("Cookie", a.Cookie).
+		SetBody(body).
+		Post(a.GetRequestUrl("uploadToken"))
 
 	if err != nil {
 		return make(map[string]interface{}), err

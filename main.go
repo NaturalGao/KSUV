@@ -56,6 +56,14 @@ type Config struct {
 	SecondDomain string
 }
 
+type ErrorD struct {
+	err string
+}
+
+func (e *ErrorD) Error() string {
+	return e.err
+}
+
 func main() {
 
 	fmt.Printf("************************** 欢迎使用 %s/%s **************************\n", Settings.Name, Settings.Version)
@@ -104,21 +112,33 @@ func uploadRun() {
 		fileName := file.Name()
 		fileLength := file.Size()
 
-		isUpload := UploadMultipart(fileName, fileLength)
-
-		if !isUpload {
-			e_c++
-			continue
-		}
-
-		fileInfo, err := UploadFinish(fileName, fileLength)
+		upToken, err := UploadToken()
 
 		if err != nil {
 			e_c++
 			continue
 		}
 
-		isSubmit := SubmitVideo(fileInfo, fileName, i, tl)
+		isUpload := UploadMultipart(upToken, fileName, fileLength)
+
+		if !isUpload {
+			e_c++
+			continue
+		}
+
+		fileInfo, err := UploadFinish(upToken, fileName, fileLength)
+
+		if err != nil {
+			e_c++
+			continue
+		}
+
+		isSubmit, isEnd := SubmitVideo(fileInfo, fileName, i, tl)
+
+		if isEnd {
+			e_c++
+			break
+		}
 
 		if !isSubmit {
 			e_c++
@@ -134,13 +154,39 @@ func uploadRun() {
 	chSignal <- syscall.SIGTERM
 }
 
+// 获取视频上传Token
+func UploadToken() (token string, err error) {
+	fmt.Println("获取视频上传凭证中...")
+
+	body := map[string]interface{}{
+		"kuaishou.web.cp.api_ph": Settings.UserConfig.WebApiPh,
+		"uploadType":             1,
+	}
+
+	resp, err := Ao.UploadToken(body)
+
+	if err != nil {
+		fmt.Println("获取上传视频凭证失败!")
+		return token, err
+	}
+
+	if resp["result"] != float64(1) {
+		fmt.Println("获取上传视频凭证失败!")
+		return token, err
+	}
+
+	data := (resp["data"]).(map[string]interface{})
+
+	return (data["token"]).(string), nil
+}
+
 // 上传视频
-func UploadMultipart(fileName string, fileLength int64) bool {
+func UploadMultipart(upToekn string, fileName string, fileLength int64) bool {
 
 	fmt.Printf("上传文件【%s】中,文件大小 %d\n", fileName, fileLength)
 
 	fileBytes, _ := ioutil.ReadFile(Settings.VideoFileUrl + fileName)
-	resp, err := Ao.UploadMultipart(Settings.UserConfig.UploadToken, fileName, fileBytes)
+	resp, err := Ao.UploadMultipart(upToekn, fileName, fileBytes)
 
 	if err != nil {
 		fmt.Printf("文件【%s】上传失败！原因：%s\n", fileName, err)
@@ -158,10 +204,10 @@ func UploadMultipart(fileName string, fileLength int64) bool {
 }
 
 // 获取远程文件信息
-func UploadFinish(fileName string, fileLength int64) (api.ResultMp, error) {
+func UploadFinish(upToken string, fileName string, fileLength int64) (api.ResultMp, error) {
 	fmt.Printf("获取远程视频文件【%s】信息中,文件大小 %d\n", fileName, fileLength)
 	body := map[string]interface{}{
-		"token":                  Settings.UserConfig.UploadToken,
+		"token":                  upToken,
 		"kuaishou.web.cp.api_ph": Settings.UserConfig.WebApiPh,
 		"fileName":               fileName,
 		"fileLength":             fileLength,
@@ -177,7 +223,9 @@ func UploadFinish(fileName string, fileLength int64) (api.ResultMp, error) {
 
 	if resp["result"] != float64(1) {
 		fmt.Printf("获取远程文件【%s】信息失败！原因：%s\n", fileName, resp["message"])
-		return make(map[string]interface{}), err
+		e_d := new(ErrorD)
+		e_d.err = (resp["message"]).(string)
+		return make(map[string]interface{}), e_d
 	}
 
 	fileInfo := (resp["data"]).(map[string]interface{})
@@ -186,7 +234,7 @@ func UploadFinish(fileName string, fileLength int64) (api.ResultMp, error) {
 }
 
 // 发布视频
-func SubmitVideo(fileInfo api.ResultMp, fileName string, s_n int, tl int64) bool {
+func SubmitVideo(fileInfo api.ResultMp, fileName string, s_n int, tl int64) (isSubmit bool, isEnd bool) {
 	fmt.Printf("发布视频【%s】中....\n", fileName)
 
 	commodity := Commodities[SelectCommodIndex]
@@ -209,14 +257,14 @@ func SubmitVideo(fileInfo api.ResultMp, fileName string, s_n int, tl int64) bool
 		18887932}
 
 	body := map[string]interface{}{
-		"fileId":                 fileInfo["fileId"],
+		"fileId":                 int((fileInfo["fileId"]).(float64)),
 		"coverKey":               fileInfo["coverKey"],
 		"kuaishou.web.cp.api_ph": Settings.UserConfig.WebApiPh,
 		"onvideoDuration":        fileInfo["duration"],
 		"associateTaskId":        commodity_map["associateTaskId"],
 		"caption":                caption, //标题,
 		"domain":                 "其它",
-		"secondDomain":           "", //其它描述
+		"secondDomain":           Settings.SecondDomain, //其它描述
 		"coverTimeStamp":         -1,
 		"photoStatus":            1,
 		"coverType":              1,
@@ -244,16 +292,19 @@ func SubmitVideo(fileInfo api.ResultMp, fileName string, s_n int, tl int64) bool
 
 	if err != nil {
 		fmt.Printf("发布视频【%s】失败！原因：%s\n", fileName, err)
-		return false
+		return false, false
 	}
 
 	if resp["result"] != float64(1) {
 		fmt.Printf("发布视频【%s】失败！原因：%s\n", fileName, resp["message"])
-		return false
+		if resp["result"] == float64(30006) {
+			return false, true
+		}
+		return false, false
 	}
 
 	fmt.Printf("发布视频【%s】成功！\n", fileName)
-	return true
+	return true, false
 }
 
 func isStart() bool {
@@ -330,7 +381,6 @@ func loadConfig() bool {
 		Settings.SecondDomain == "" ||
 		(*Settings.UserConfig) == (UserConfig{}) ||
 		(*Settings.UserConfig).Cookie == "" ||
-		(*Settings.UserConfig).UploadToken == "" ||
 		(*Settings.UserConfig).WebApiPh == "" {
 		fmt.Println("配置文件确实必要参数，程序即将终止...")
 		return false
@@ -449,7 +499,7 @@ RESTART:
 		return false
 	}
 
-	input = strings.Trim(input, "\n")
+	input = strings.Trim(input, "\n\r")
 
 	SelectCommodIndex, err = strconv.Atoi(input)
 

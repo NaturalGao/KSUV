@@ -18,7 +18,6 @@
     "authors": "NaturalGao",
     "userConfig": {
         "cookie": "", // 用户 Cookie（必填）
-        "uploadToken": "", // 上传 Token（必填）
         "webApiPh": "" // 客户端标识符（必填）
     },
     "titleFileUrl": "./title.txt", // 标题文件路径（必填）
@@ -27,4 +26,17 @@
 }
 ```
 
-其它相关信息待更新...
+
+
+## cookie 和 webApiPh 获取方式
+
+登录 ”快手创作者服务平台“，打开开发者工具，通常快捷键F12
+
+
+
+![](https://i.bmp.ovh/imgs/2022/02/1e11a828931ad05f.png)
+
+
+
+上图画红色框的就是需要的 Cookie，webApiPh 就是 Cookie 下的
+

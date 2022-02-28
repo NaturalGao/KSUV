@@ -4,10 +4,9 @@
     "authors": "NaturalGao",
     "userConfig": {
         "cookie": "",
-        "uploadToken": "",
         "webApiPh": ""
     },
     "titleFileUrl": "./title.txt",
     "videoFileUrl": "./video/",
-    "secondDomain": "其它描述"
+    "secondDomain": "其它备注"
 }
