@@ -109,7 +109,7 @@ func uploadRun() {
 	tl := int64(len(Titles))
 
 	var wg sync.WaitGroup
-	ch := make(chan struct{}, 4)
+	ch := make(chan struct{}, 10)
 
 	for i, file := range VideoFiles {
 		ch <- struct{}{}
