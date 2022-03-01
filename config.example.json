@@ -8,5 +8,6 @@
     },
     "titleFileUrl": "./title.txt",
     "videoFileUrl": "./video/",
-    "secondDomain": "其它备注"
+    "secondDomain": "其它备注",
+    "useSerialNumber": true
 }

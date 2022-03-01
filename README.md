@@ -22,7 +22,8 @@
     },
     "titleFileUrl": "./title.txt", // 标题文件路径（必填）
     "videoFileUrl": "./video/", // 视频文件路径（必填）
-    "secondDomain": "其它描述" // 视频其它描述
+    "secondDomain": "其它描述", // 视频其它描述
+    "useSerialNumber":true		// 是否采用编号
 }
 ```
 
