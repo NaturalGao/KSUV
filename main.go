@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"io/ioutil"
@@ -58,39 +59,29 @@ type Config struct {
 	UseSerialNumber bool
 }
 
-type ErrorD struct {
-	err string
-}
-
-func (e *ErrorD) Error() string {
-	return e.err
+// ErrorHandler 返回一个错误。
+func ErrorHandler(err string) error {
+	return errors.New(err)
 }
 
 func main() {
 
 	fmt.Printf("************************** 欢迎使用 %s/%s **************************\n", Settings.Name, Settings.Version)
 
-	fmt.Printf("程序已启动就绪：\n1. enter 开始执行程序\n2. Esc 终止程序\n")
+	fmt.Printf("程序已启动就绪：\n按 enter 开始执行程序\n")
 
 	isStart := isStart()
 
-	if !isStart {
-		fmt.Println("程序即将终止....")
-		os.Exit(1)
+	if isStart {
+		Ao = api.New(Settings.UserConfig.Cookie)
+
+		isSetCommodite := setCommoditie()
+
+		if isSetCommodite && selectCommoditie() {
+			fmt.Println("程序开始执行.......")
+			uploadRun()
+		}
 	}
-
-	fmt.Println("程序开始执行.......")
-
-	Ao = api.New(Settings.UserConfig.Cookie)
-
-	isSelected := selectCommoditie()
-
-	if !isSelected {
-		fmt.Println("程序即将终止....")
-		os.Exit(1)
-	}
-
-	uploadRun()
 
 	//合建chan
 	chSignal = make(chan os.Signal, 1)
@@ -104,57 +95,66 @@ func main() {
 
 // 上传任务开始
 func uploadRun() {
+
 	s_c, e_c := 0, 0
 
 	tl := int64(len(Titles))
 
 	var wg sync.WaitGroup
+
 	ch := make(chan struct{}, 10)
+
+	end_status := false
 
 	for i, file := range VideoFiles {
 		ch <- struct{}{}
+
+		if end_status {
+			break
+		}
+
 		wg.Add(1)
 
 		go func(file fs.FileInfo, i int) {
 
 			defer wg.Done()
 
+			err_fc := func() {
+				e_c++
+				<-ch
+				end_status = true
+			}
+
 			fileName := file.Name()
 			fileLength := file.Size()
+
+			fmt.Printf("文件名：%s 文件大小：%d\n", fileName, fileLength)
 
 			upToken, err := UploadToken()
 
 			if err != nil {
-				e_c++
-				<-ch
+				err_fc()
 				return
 			}
 
 			isUpload := UploadMultipart(upToken, fileName, fileLength)
 
 			if !isUpload {
-				e_c++
-				<-ch
+				err_fc()
 				return
 			}
 
 			fileInfo, err := UploadFinish(upToken, fileName, fileLength)
 
 			if err != nil {
-				e_c++
-				<-ch
+				err_fc()
 				return
 			}
 
-			isSubmit, isEnd := SubmitVideo(fileInfo, fileName, i, tl)
-
-			if isEnd {
-				os.Exit(1)
-			}
+			isSubmit := SubmitVideo(fileInfo, fileName, i, tl)
 
 			if !isSubmit {
-				e_c++
-				<-ch
+				err_fc()
 				return
 			}
 
@@ -164,9 +164,12 @@ func uploadRun() {
 	}
 
 	wg.Wait()
+	close(ch)
 
-	fmt.Println("视频发布完成!")
-	fmt.Printf("success: %d  error: %d\n", s_c, e_c)
+	defer func() {
+		fmt.Println("视频发布完成!")
+		fmt.Printf("success: %d  error: %d\n", s_c, e_c)
+	}()
 }
 
 // 获取视频上传Token
@@ -186,8 +189,9 @@ func UploadToken() (token string, err error) {
 	}
 
 	if resp["result"] != float64(1) {
-		fmt.Println("获取上传视频凭证失败!")
-		return token, err
+		err_msg := resp["message"].(string)
+		fmt.Println(err_msg)
+		return token, ErrorHandler(err_msg)
 	}
 
 	data := (resp["data"]).(map[string]interface{})
@@ -200,7 +204,15 @@ func UploadMultipart(upToekn string, fileName string, fileLength int64) bool {
 
 	fmt.Printf("上传文件【%s】中,文件大小 %d\n", fileName, fileLength)
 
-	fileBytes, _ := ioutil.ReadFile(Settings.VideoFileUrl + fileName)
+	videoFilePath := strings.TrimSuffix(Settings.VideoFileUrl, "/") + "/" + fileName
+
+	fileBytes, err := ioutil.ReadFile(videoFilePath)
+
+	if err != nil {
+		fmt.Printf("文件读取失败：%s\n", err)
+		return false
+	}
+
 	resp, err := Ao.UploadMultipart(upToekn, fileName, fileBytes)
 
 	if err != nil {
@@ -238,9 +250,8 @@ func UploadFinish(upToken string, fileName string, fileLength int64) (api.Result
 
 	if resp["result"] != float64(1) {
 		fmt.Printf("获取远程文件【%s】信息失败！原因：%s\n", fileName, resp["message"])
-		e_d := new(ErrorD)
-		e_d.err = (resp["message"]).(string)
-		return make(map[string]interface{}), e_d
+		err_msg := resp["message"].(string)
+		return make(map[string]interface{}), ErrorHandler(err_msg)
 	}
 
 	fileInfo := (resp["data"]).(map[string]interface{})
@@ -249,7 +260,7 @@ func UploadFinish(upToken string, fileName string, fileLength int64) (api.Result
 }
 
 // 发布视频
-func SubmitVideo(fileInfo api.ResultMp, fileName string, s_n int, tl int64) (isSubmit bool, isEnd bool) {
+func SubmitVideo(fileInfo api.ResultMp, fileName string, s_n int, tl int64) bool {
 	fmt.Printf("发布视频【%s】中....\n", fileName)
 
 	commodity := Commodities[SelectCommodIndex]
@@ -311,19 +322,16 @@ func SubmitVideo(fileInfo api.ResultMp, fileName string, s_n int, tl int64) (isS
 
 	if err != nil {
 		fmt.Printf("发布视频【%s】失败！原因：%s\n", fileName, err)
-		return false, false
+		return false
 	}
 
 	if resp["result"] != float64(1) {
 		fmt.Printf("发布视频【%s】失败！原因：%s\n", fileName, resp["message"])
-		if resp["result"] == float64(30006) {
-			return false, true
-		}
-		return false, false
+		return false
 	}
 
 	fmt.Printf("发布视频【%s】成功！\n", fileName)
-	return true, false
+	return true
 }
 
 func isStart() bool {
@@ -339,10 +347,7 @@ func isStart() bool {
 			return false
 		}
 
-		if key == keyboard.KeyEsc {
-			keyboard.Close()
-			return false
-		} else if key == keyboard.KeyEnter {
+		if key == keyboard.KeyEnter {
 			// 程序开始
 			keyboard.Close()
 			break
@@ -463,8 +468,8 @@ func loadVideoPath() bool {
 	return true
 }
 
-// 绑定关联商品
-func selectCommoditie() bool {
+// 获取关联商品
+func setCommoditie() bool {
 	body := map[string]interface{}{
 		"kuaishou.web.cp.api_ph": Settings.UserConfig.WebApiPh,
 		"type":                   1,
@@ -479,13 +484,19 @@ func selectCommoditie() bool {
 	}
 
 	if r["result"] != float64(1) {
-		fmt.Println(r["message"])
+		fmt.Println("身份已过期！请重新配置！")
 		return false
 	}
 
 	l := (r["data"]).(map[string]interface{})["list"]
 
 	Commodities = l.([]interface{})
+
+	return true
+}
+
+// 绑定关联商品
+func selectCommoditie() bool {
 
 	fmt.Println("发现有", len(Commodities), "种商品可选择,请输入对应的编号关联上传商品：")
 
