@@ -25,6 +25,8 @@ import (
 const FILE_URL string = "./config.json"
 const MAX_UPLOAD_VIDEO = 100
 
+var init_status, title_status, load_video_status bool
+
 var chSignal chan os.Signal
 
 var Settings Config
@@ -66,20 +68,35 @@ func ErrorHandler(err string) error {
 
 func main() {
 
-	fmt.Printf("************************** 欢迎使用 %s/%s **************************\n", Settings.Name, Settings.Version)
+	fmt.Println("初始化配置中，请稍后......")
 
-	fmt.Printf("程序已启动就绪：\n按 enter 开始执行程序\n")
+	init_status = loadConfig()
 
-	isStart := isStart()
+	if init_status {
+		title_status = loadTitle()
 
-	if isStart {
-		Ao = api.New(Settings.UserConfig.Cookie)
+		load_video_status = loadVideoPath()
 
-		isSetCommodite := setCommoditie()
+		if title_status && load_video_status {
+			fmt.Println("配置文件加载成功，程序启动中,请稍后....")
 
-		if isSetCommodite && selectCommoditie() {
-			fmt.Println("程序开始执行.......")
-			uploadRun()
+			fmt.Printf("************************** 欢迎使用 %s/%s **************************\n", Settings.Name, Settings.Version)
+
+			fmt.Printf("程序已启动就绪：\n1. enter 开始执行程序\n2. Esc 终止程序\n")
+
+			isStart := isStart()
+
+			if !isStart {
+				os.Exit(1)
+			}
+
+			Ao = api.New(Settings.UserConfig.Cookie)
+
+			isSetCommodite := setCommoditie()
+
+			if isSetCommodite && selectCommoditie() {
+				uploadRun()
+			}
 		}
 	}
 
@@ -351,34 +368,13 @@ func isStart() bool {
 			// 程序开始
 			keyboard.Close()
 			break
+		} else if key == keyboard.KeyEsc {
+			keyboard.Close()
+			return false
 		}
 	}
 
 	return true
-}
-
-func init() {
-	fmt.Println("初始化配置中，请稍后......")
-
-	init_status := loadConfig()
-	if !init_status {
-		os.Exit(1)
-	}
-
-	// 加载标题文件``
-	title_status := loadTitle()
-
-	if !title_status {
-		os.Exit(1)
-	}
-
-	load_video_status := loadVideoPath()
-
-	if !load_video_status {
-		os.Exit(1)
-	}
-
-	fmt.Println("配置文件加载成功，程序启动中,请稍后....")
 }
 
 // 初始化配置
@@ -387,14 +383,14 @@ func loadConfig() bool {
 	data, err := ioutil.ReadFile(FILE_URL)
 
 	if err != nil {
-		fmt.Println(FILE_URL, "读取文件失败，程序即将终止....")
+		fmt.Println(FILE_URL, "读取配置文件失败，请检查配置文件 config.json 是否存在!!!")
 		return false
 	}
 
 	err = json.Unmarshal(data, &Settings)
 
 	if err != nil {
-		fmt.Println("配置文件解析失败，程序即将终止....")
+		fmt.Println("配置文件解析失败!!!")
 		return false
 	}
 
@@ -406,7 +402,7 @@ func loadConfig() bool {
 		(*Settings.UserConfig) == (UserConfig{}) ||
 		(*Settings.UserConfig).Cookie == "" ||
 		(*Settings.UserConfig).WebApiPh == "" {
-		fmt.Println("配置文件确实必要参数，程序即将终止...")
+		fmt.Println("配置文件确实必要参数!!!")
 		return false
 	}
 
@@ -417,12 +413,12 @@ func loadTitle() bool {
 	data, err := ioutil.ReadFile(Settings.TitleFileUrl)
 
 	if err != nil {
-		fmt.Println(Settings.TitleFileUrl, "文件读取失败，程序即将终止....")
+		fmt.Println(Settings.TitleFileUrl, "文件读取失败!请检查标题文件路径:", Settings.TitleFileUrl)
 		return false
 	}
 
 	if len(data) == 0 {
-		fmt.Println(Settings.TitleFileUrl, "标题文件为空，程序即将终止....")
+		fmt.Println(Settings.TitleFileUrl, "标题文件为空，请添加标题！")
 		return false
 	}
 
@@ -438,7 +434,7 @@ func loadVideoPath() bool {
 	files, err := ioutil.ReadDir(Settings.VideoFileUrl)
 
 	if err != nil {
-		fmt.Println(Settings.VideoFileUrl, "目录不正确，程序即将终止....")
+		fmt.Println(Settings.VideoFileUrl, "视频目录不正确，请检查目录:", Settings.VideoFileUrl)
 		return false
 	}
 
@@ -455,7 +451,7 @@ func loadVideoPath() bool {
 	v_l := len(VideoFiles)
 
 	if v_l == 0 {
-		fmt.Println(Settings.VideoFileUrl, "此目录下暂未发现 MP4 格式文件,程序即将终止....")
+		fmt.Println(Settings.VideoFileUrl, "此目录下暂未发现 MP4 格式文件!!")
 		return false
 	}
 
